@@ -4,7 +4,7 @@ const $participants = document.querySelector('.participants');
 
 peerConnection.addEventListener('icecandidate', ({ candidate }) => {
   if (candidate) {
-    signalling.postMessage({ type: 'candidate', payload: candidate.toJSON() });
+    sendLocalIceCandidateToRemote(candidate);
   }
 });
 peerConnection.addEventListener('track', ({ streams, track }) => {
@@ -16,20 +16,28 @@ peerConnection.addEventListener('track', ({ streams, track }) => {
 signalling.addEventListener('message', async (event) => {
   const { type, payload } = event.data;
   if (type === 'offer') {
-    peerConnection.setRemoteDescription(payload);
-    const mediaStream = await initializeUserMedia();
-    displayMediaStream(mediaStream);
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    signalling.postMessage({ type: 'answer', payload: answer.toJSON() });
+    await receiveRemoteSessionDescription(payload);
+    const mediaStream = await displayLocalMediaStream();
+    addMediaStreamToPeerConnection(mediaStream);
+    const answer = await createSessionDescriptionAnswer();
+    await sendLocalSessionDescriptionToRemote(answer);
   } else if (type === 'answer') {
-    await peerConnection.setRemoteDescription(payload);
+    await receiveRemoteSessionDescription(payload);
   } else if (type === 'candidate') {
-    await peerConnection.addIceCandidate(payload);
+    await receiveRemoteIceCandidate(payload);
   }
 });
 
-async function initializeUserMedia() {
+async function startCall() {
+  const mediaStream = await displayLocalMediaStream();
+  addMediaStreamToPeerConnection(mediaStream);
+  const offer = await createSessionDescriptionOffer();
+  await sendLocalSessionDescriptionToRemote(offer);
+}
+
+window.startCall = startCall;
+
+async function displayLocalMediaStream() {
   const mediaStream = await navigator.mediaDevices.getUserMedia({
     video: {
       width: 1920,
@@ -37,13 +45,11 @@ async function initializeUserMedia() {
     },
     audio: true,
   });
-  mediaStream.getTracks().forEach((mediaStreamTrack) => {
-    peerConnection.addTrack(mediaStreamTrack, mediaStream);
-  });
+  displayMediaStream(mediaStream);
   return mediaStream;
 }
 
-async function displayMediaStream(mediaStream) {
+function displayMediaStream(mediaStream) {
   const video = document.createElement('video');
   video.autoplay = true;
   video.playsInline = true;
@@ -51,12 +57,42 @@ async function displayMediaStream(mediaStream) {
   $participants.append(video);
 }
 
-async function startCall() {
-  const mediaStream = await initializeUserMedia();
-  displayMediaStream(mediaStream);
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  signalling.postMessage({ type: 'offer', payload: offer.toJSON() });
+function addMediaStreamToPeerConnection(mediaStream) {
+  mediaStream.getTracks().forEach((mediaStreamTrack) => {
+    peerConnection.addTrack(mediaStreamTrack, mediaStream);
+  });
 }
 
-window.startCall = startCall;
+async function createSessionDescriptionOffer() {
+  const offer = await peerConnection.createOffer();
+  await peerConnection.setLocalDescription(offer);
+  return offer;
+}
+
+async function createSessionDescriptionAnswer() {
+  const answer = await peerConnection.createAnswer();
+  await peerConnection.setLocalDescription(answer);
+  return answer;
+}
+
+async function receiveRemoteSessionDescription(sessionDescription) {
+  await peerConnection.setRemoteDescription(sessionDescription);
+}
+
+async function sendLocalSessionDescriptionToRemote(sessionDescription) {
+  signalling.postMessage({
+    type: sessionDescription.type,
+    payload: sessionDescription.toJSON(),
+  });
+}
+
+async function receiveRemoteIceCandidate(iceCandidate) {
+  peerConnection.addIceCandidate(iceCandidate);
+}
+
+async function sendLocalIceCandidateToRemote(iceCandidate) {
+  signalling.postMessage({
+    type: 'candidate',
+    payload: iceCandidate.toJSON(),
+  });
+}
