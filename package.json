@@ -1,0 +1,10 @@
+{
+  "name": "video-conference-app",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {},
+  "keywords": [],
+  "author": "Arnelle Balane <arnellebalane@gmail.com>",
+  "license": "MIT"
+}
