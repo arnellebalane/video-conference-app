@@ -1,13 +1,14 @@
 const signalling = new BroadcastChannel('signalling');
 const peerConnection = new RTCPeerConnection();
+const $participants = document.querySelector('.participants');
 
 peerConnection.addEventListener('icecandidate', ({ candidate }) => {
   if (candidate) {
     signalling.postMessage({ type: 'candidate', payload: candidate.toJSON() });
   }
 });
-peerConnection.addEventListener('track', ({ streams }) => {
-  if ((streams?.length ?? 0) > 0) {
+peerConnection.addEventListener('track', ({ streams, track }) => {
+  if ((streams?.length ?? 0) > 0 && track.kind === 'video') {
     displayMediaStream(streams[0]);
   }
 });
@@ -30,8 +31,11 @@ signalling.addEventListener('message', async (event) => {
 
 async function initializeUserMedia() {
   const mediaStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    // audio: true,
+    video: {
+      width: 1920,
+      height: 1080,
+    },
+    audio: true,
   });
   mediaStream.getTracks().forEach((mediaStreamTrack) => {
     peerConnection.addTrack(mediaStreamTrack, mediaStream);
@@ -44,7 +48,7 @@ async function displayMediaStream(mediaStream) {
   video.autoplay = true;
   video.playsInline = true;
   video.srcObject = mediaStream;
-  document.body.append(video);
+  $participants.append(video);
 }
 
 async function startCall() {
@@ -54,3 +58,5 @@ async function startCall() {
   await peerConnection.setLocalDescription(offer);
   signalling.postMessage({ type: 'offer', payload: offer.toJSON() });
 }
+
+window.startCall = startCall;
