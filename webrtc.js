@@ -34,7 +34,7 @@ export async function displayLocalMediaStream() {
     },
     audio: true,
   });
-  displayMediaStream(mediaStream);
+  displayMediaStream(mediaStream, { muted: true });
 }
 
 export async function receiveRemoteIceCandidate(peerId, candidate) {
@@ -58,11 +58,12 @@ function createPeerConnection() {
   });
 }
 
-function displayMediaStream(mediaStream) {
+function displayMediaStream(mediaStream, options) {
   const video = document.createElement('video');
   video.autoplay = true;
   video.playsInline = true;
   video.srcObject = mediaStream;
+  video.muted = options?.muted ?? false;
   $participants.append(video);
 }
 
