@@ -1,98 +1,87 @@
-const signalling = new BroadcastChannel('signalling');
-const peerConnection = new RTCPeerConnection();
-const $participants = document.querySelector('.participants');
+import { initializeApp } from 'https://www.gstatic.com/firebasejs/9.10.0/firebase-app.js';
+import {
+  getFirestore,
+  collection,
+  doc,
+  addDoc,
+  getDoc,
+  setDoc,
+  getDocs,
+  onSnapshot,
+} from 'https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js';
+import {
+  displayLocalMediaStream,
+  offerPeerConnection,
+  answerPeerConnection,
+  completePeerConnection,
+  receiveRemoteIceCandidate,
+} from './webrtc.js';
 
-peerConnection.addEventListener('icecandidate', ({ candidate }) => {
-  if (candidate) {
-    sendLocalIceCandidateToRemote(candidate);
-  }
+initializeApp({
+  apiKey: 'AIzaSyCX5lnUCYAq63ERmBk-j0X9LuvQnULIzKw',
+  authDomain: 'video-conference-app-634cc.firebaseapp.com',
+  projectId: 'video-conference-app-634cc',
+  storageBucket: 'video-conference-app-634cc.appspot.com',
+  messagingSenderId: '960527121460',
+  appId: '1:960527121460:web:200a93c9f77909714d1e61',
 });
-peerConnection.addEventListener('track', ({ streams, track }) => {
-  if ((streams?.length ?? 0) > 0 && track.kind === 'video') {
-    displayMediaStream(streams[0]);
+const db = getFirestore();
+
+(async () => {
+  const params = new URLSearchParams(location.search);
+  const callId = params.get('callid');
+  if (!callId) {
+    return;
   }
-});
 
-signalling.addEventListener('message', async (event) => {
-  const { type, payload } = event.data;
-  if (type === 'offer') {
-    await receiveRemoteSessionDescription(payload);
-    const mediaStream = await displayLocalMediaStream();
-    addMediaStreamToPeerConnection(mediaStream);
-    const answer = await createSessionDescriptionAnswer();
-    await sendLocalSessionDescriptionToRemote(answer);
-  } else if (type === 'answer') {
-    await receiveRemoteSessionDescription(payload);
-  } else if (type === 'candidate') {
-    await receiveRemoteIceCandidate(payload);
+  await displayLocalMediaStream();
+  const callDoc = await getDoc(doc(db, 'calls', callId));
+  const participantsRef = collection(callDoc.ref, 'participants');
+  const participantRef = await addDoc(participantsRef, {});
+  const peersRef = collection(participantRef, 'peers');
+  const candidatesRef = collection(participantRef, 'candidates');
+
+  onSnapshot(peersRef, async (snapshot) => {
+    for (const change of snapshot.docChanges()) {
+      if (change.type === 'added') {
+        const data = change.doc.data();
+        if (data.offer) {
+          const answer = await answerPeerConnection(change.doc.id, data.offer, {
+            async onIceCandidate(candidate) {
+              await addDoc(collection(participantsRef, change.doc.id, 'candidates'), {
+                candidate,
+                peerId: participantRef.id,
+              });
+            },
+          });
+          await setDoc(doc(participantsRef, change.doc.id, 'peers', participantRef.id), { answer });
+        } else if (data.answer) {
+          await completePeerConnection(change.doc.id, data.answer);
+        }
+      }
+    }
+  });
+  onSnapshot(candidatesRef, async (snapshot) => {
+    for (const change of snapshot.docChanges()) {
+      if (change.type === 'added') {
+        const { peerId, candidate } = change.doc.data();
+        await receiveRemoteIceCandidate(peerId, candidate);
+      }
+    }
+  });
+
+  const participants = await getDocs(participantsRef);
+  for (const participantDoc of participants.docs) {
+    if (participantDoc.id !== participantRef.id) {
+      const offer = await offerPeerConnection(participantDoc.id, {
+        async onIceCandidate(candidate) {
+          await addDoc(collection(participantsRef, participantDoc.id, 'candidates'), {
+            candidate,
+            peerId: participantRef.id,
+          });
+        },
+      });
+      await setDoc(doc(participantDoc.ref, 'peers', participantRef.id), { offer });
+    }
   }
-});
-
-async function startCall() {
-  const mediaStream = await displayLocalMediaStream();
-  addMediaStreamToPeerConnection(mediaStream);
-  const offer = await createSessionDescriptionOffer();
-  await sendLocalSessionDescriptionToRemote(offer);
-}
-
-window.startCall = startCall;
-
-async function displayLocalMediaStream() {
-  const mediaStream = await navigator.mediaDevices.getUserMedia({
-    video: {
-      width: 1920,
-      height: 1080,
-    },
-    audio: true,
-  });
-  displayMediaStream(mediaStream);
-  return mediaStream;
-}
-
-function displayMediaStream(mediaStream) {
-  const video = document.createElement('video');
-  video.autoplay = true;
-  video.playsInline = true;
-  video.srcObject = mediaStream;
-  $participants.append(video);
-}
-
-function addMediaStreamToPeerConnection(mediaStream) {
-  mediaStream.getTracks().forEach((mediaStreamTrack) => {
-    peerConnection.addTrack(mediaStreamTrack, mediaStream);
-  });
-}
-
-async function createSessionDescriptionOffer() {
-  const offer = await peerConnection.createOffer();
-  await peerConnection.setLocalDescription(offer);
-  return offer;
-}
-
-async function createSessionDescriptionAnswer() {
-  const answer = await peerConnection.createAnswer();
-  await peerConnection.setLocalDescription(answer);
-  return answer;
-}
-
-async function receiveRemoteSessionDescription(sessionDescription) {
-  await peerConnection.setRemoteDescription(sessionDescription);
-}
-
-async function sendLocalSessionDescriptionToRemote(sessionDescription) {
-  signalling.postMessage({
-    type: sessionDescription.type,
-    payload: sessionDescription.toJSON(),
-  });
-}
-
-async function receiveRemoteIceCandidate(iceCandidate) {
-  peerConnection.addIceCandidate(iceCandidate);
-}
-
-async function sendLocalIceCandidateToRemote(iceCandidate) {
-  signalling.postMessage({
-    type: 'candidate',
-    payload: iceCandidate.toJSON(),
-  });
-}
+})();
