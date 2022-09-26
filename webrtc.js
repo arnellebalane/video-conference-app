@@ -3,7 +3,7 @@ const peerConnections = {};
 let mediaStream;
 
 export async function offerPeerConnection(peerId, options) {
-  const peerConnection = new RTCPeerConnection();
+  const peerConnection = createPeerConnection();
   peerConnections[peerId] = peerConnection;
   addMediaStreamToPeerConnection(peerConnection, mediaStream);
   attachPeerConnectionListeners(peerConnection, options);
@@ -12,7 +12,7 @@ export async function offerPeerConnection(peerId, options) {
 }
 
 export async function answerPeerConnection(peerId, offer, options) {
-  const peerConnection = new RTCPeerConnection();
+  const peerConnection = createPeerConnection();
   peerConnections[peerId] = peerConnection;
   addMediaStreamToPeerConnection(peerConnection, mediaStream);
   attachPeerConnectionListeners(peerConnection, options);
@@ -40,6 +40,22 @@ export async function displayLocalMediaStream() {
 export async function receiveRemoteIceCandidate(peerId, candidate) {
   const peerConnection = peerConnections[peerId];
   await peerConnection.addIceCandidate(candidate);
+}
+
+function createPeerConnection() {
+  return new RTCPeerConnection({
+    iceServers: [
+      {
+        urls: [
+          'stun:stun.l.google.com:19302',
+          'stun:stun1.l.google.com:19302',
+          'stun:stun2.l.google.com:19302',
+          'stun:stun3.l.google.com:19302',
+          'stun:stun4.l.google.com:19302',
+        ],
+      },
+    ],
+  });
 }
 
 function displayMediaStream(mediaStream) {
