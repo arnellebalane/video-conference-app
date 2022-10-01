@@ -6,7 +6,7 @@ export async function offerPeerConnection(peerId, options) {
   const peerConnection = createPeerConnection();
   peerConnections[peerId] = peerConnection;
   addMediaStreamToPeerConnection(peerConnection, mediaStream);
-  attachPeerConnectionListeners(peerConnection, options);
+  attachPeerConnectionListeners(peerConnection, { ...options, peerId });
   const offer = await createSessionDescriptionOffer(peerConnection);
   return offer.toJSON();
 }
@@ -15,7 +15,7 @@ export async function answerPeerConnection(peerId, offer, options) {
   const peerConnection = createPeerConnection();
   peerConnections[peerId] = peerConnection;
   addMediaStreamToPeerConnection(peerConnection, mediaStream);
-  attachPeerConnectionListeners(peerConnection, options);
+  attachPeerConnectionListeners(peerConnection, { ...options, peerId });
   receiveRemoteSessionDescription(peerConnection, offer);
   const answer = await createSessionDescriptionAnswer(peerConnection);
   return answer.toJSON();
@@ -32,7 +32,7 @@ export async function displayLocalMediaStream() {
       width: 1920,
       height: 1080,
     },
-    audio: true,
+    // audio: true,
   });
   displayMediaStream(mediaStream, { muted: true });
 }
@@ -40,6 +40,14 @@ export async function displayLocalMediaStream() {
 export async function receiveRemoteIceCandidate(peerId, candidate) {
   const peerConnection = peerConnections[peerId];
   await peerConnection.addIceCandidate(candidate);
+}
+
+export function disconnectPeerConnection(peerId) {
+  if (peerConnections[peerId]) {
+    document.querySelector(`[data-peer-id="${peerId}"]`)?.remove();
+    peerConnections[peerId].close();
+    delete peerConnections[peerId];
+  }
 }
 
 function createPeerConnection() {
@@ -64,6 +72,9 @@ function displayMediaStream(mediaStream, options) {
   video.playsInline = true;
   video.srcObject = mediaStream;
   video.muted = options?.muted ?? false;
+  if (options.peerId) {
+    video.dataset.peerId = options.peerId;
+  }
   $participants.append(video);
 }
 
@@ -77,7 +88,15 @@ function attachPeerConnectionListeners(peerConnection, options) {
   });
   peerConnection.addEventListener('track', ({ streams, track }) => {
     if ((streams?.length ?? 0) > 0 && track.kind === 'video') {
-      displayMediaStream(streams[0]);
+      displayMediaStream(streams[0], options);
+    }
+  });
+  peerConnection.addEventListener('connectionstatechange', (event) => {
+    if (event.target.connectionState === 'disconnected') {
+      disconnectPeerConnection(options.peerId);
+      if (typeof options?.onDisconnect === 'function') {
+        options.onDisconnect();
+      }
     }
   });
 }

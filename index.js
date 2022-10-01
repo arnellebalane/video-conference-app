@@ -6,6 +6,7 @@ import {
   addDoc,
   getDoc,
   setDoc,
+  deleteDoc,
   getDocs,
   onSnapshot,
 } from 'https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js';
@@ -15,6 +16,7 @@ import {
   answerPeerConnection,
   completePeerConnection,
   receiveRemoteIceCandidate,
+  disconnectPeerConnection,
 } from './webrtc.js';
 
 initializeApp({
@@ -41,6 +43,12 @@ const db = getFirestore();
   const peersRef = collection(participantRef, 'peers');
   const candidatesRef = collection(participantRef, 'candidates');
 
+  const $leaveButton = document.querySelector('.leave-call');
+  $leaveButton?.addEventListener('click', async () => {
+    await deleteDoc(participantRef);
+    window.close();
+  });
+
   onSnapshot(peersRef, async (snapshot) => {
     for (const change of snapshot.docChanges()) {
       if (change.type === 'added') {
@@ -52,6 +60,9 @@ const db = getFirestore();
                 candidate,
                 peerId: participantRef.id,
               });
+            },
+            async onDisconnect() {
+              await deleteDoc(doc(peersRef, change.doc.id));
             },
           });
           await setDoc(doc(participantsRef, change.doc.id, 'peers', participantRef.id), { answer });
@@ -66,6 +77,13 @@ const db = getFirestore();
       if (change.type === 'added') {
         const { peerId, candidate } = change.doc.data();
         await receiveRemoteIceCandidate(peerId, candidate);
+      }
+    }
+  });
+  onSnapshot(participantsRef, async (snapshot) => {
+    for (const change of snapshot.docChanges()) {
+      if (change.type === 'removed') {
+        disconnectPeerConnection(change.doc.id);
       }
     }
   });
