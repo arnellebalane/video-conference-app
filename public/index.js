@@ -9,6 +9,7 @@ import {
   deleteDoc,
   getDocs,
   onSnapshot,
+  connectFirestoreEmulator,
 } from 'https://www.gstatic.com/firebasejs/9.10.0/firebase-firestore.js';
 import {
   displayLocalMediaStream,
@@ -28,6 +29,12 @@ initializeApp({
   appId: '1:960527121460:web:200a93c9f77909714d1e61',
 });
 const db = getFirestore();
+let leaveCallFunctionUrl = 'https://us-central1-video-conference-app-634cc.cloudfunctions.net/leaveCall';
+
+if (location.hostname === 'localhost') {
+  connectFirestoreEmulator(db, 'localhost', 8080);
+  leaveCallFunctionUrl = 'http://localhost:5001/video-conference-app-634cc/us-central1/leaveCall';
+}
 
 (async () => {
   const params = new URLSearchParams(location.search);
@@ -47,6 +54,15 @@ const db = getFirestore();
   $leaveButton?.addEventListener('click', async () => {
     await deleteDoc(participantRef);
     window.close();
+  });
+  window.addEventListener('beforeunload', () => {
+    navigator.sendBeacon(
+      leaveCallFunctionUrl,
+      JSON.stringify({
+        callid: callId,
+        participantid: participantRef.id,
+      })
+    );
   });
 
   onSnapshot(peersRef, async (snapshot) => {

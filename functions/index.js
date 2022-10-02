@@ -1,9 +1,10 @@
-const functions = require("firebase-functions");
+const functions = require('firebase-functions');
+const admin = require('firebase-admin');
 
-// // Create and Deploy Your First Cloud Functions
-// // https://firebase.google.com/docs/functions/write-firebase-functions
-//
-// exports.helloWorld = functions.https.onRequest((request, response) => {
-//   functions.logger.info("Hello logs!", {structuredData: true});
-//   response.send("Hello from Firebase!");
-// });
+admin.initializeApp();
+
+exports.leaveCall = functions.https.onRequest(async (request, response) => {
+  const { callid, participantid } = JSON.parse(request.body);
+  await admin.firestore().doc(`calls/${callid}/participants/${participantid}`).delete();
+  response.end();
+});
