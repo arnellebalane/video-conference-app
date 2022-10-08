@@ -44,8 +44,7 @@ if (location.hostname === 'localhost') {
   }
 
   await displayLocalMediaStream();
-  const callDoc = await getDoc(doc(db, 'calls', callId));
-  const participantsRef = collection(callDoc.ref, 'participants');
+  const participantsRef = collection(db, 'calls', callId, 'participants');
   const participantRef = await addDoc(participantsRef, {});
   const peersRef = collection(participantRef, 'peers');
   const candidatesRef = collection(participantRef, 'candidates');
