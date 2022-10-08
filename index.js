@@ -2,6 +2,9 @@ const signalling = new BroadcastChannel('signalling');
 const peerConnection = new RTCPeerConnection();
 const $participants = document.querySelector('.participants');
 
+const $startCall = document.querySelector('.start-call');
+$startCall.addEventListener('click', startCall);
+
 peerConnection.addEventListener('icecandidate', ({ candidate }) => {
   if (candidate) {
     sendLocalIceCandidateToRemote(candidate);
@@ -20,6 +23,7 @@ signalling.addEventListener('message', async (event) => {
     const mediaStream = await displayLocalMediaStream();
     addMediaStreamToPeerConnection(mediaStream);
     const answer = await createSessionDescriptionAnswer();
+    console.log(answer.sdp);
     await sendLocalSessionDescriptionToRemote(answer);
   } else if (type === 'answer') {
     await receiveRemoteSessionDescription(payload);
@@ -32,10 +36,9 @@ async function startCall() {
   const mediaStream = await displayLocalMediaStream();
   addMediaStreamToPeerConnection(mediaStream);
   const offer = await createSessionDescriptionOffer();
+  console.log(offer.sdp);
   await sendLocalSessionDescriptionToRemote(offer);
 }
-
-window.startCall = startCall;
 
 async function displayLocalMediaStream() {
   const mediaStream = await navigator.mediaDevices.getUserMedia({
